@@ -7,15 +7,12 @@ import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.Router;
 import io.vertx.ext.web.handler.BodyHandler;
 import io.vertx.ext.web.handler.StaticHandler;
+import io.vertx.ext.sql.ResultSet;
 
-import java.util.HashMap;
 import java.util.List;
-import java.util.stream.Collectors;
 
 public class MainVerticle extends AbstractVerticle {
 
-  private HashMap<String, String> services = new HashMap<>();
-  //TODO use this
   private DBConnector connector;
   private BackgroundPoller poller = new BackgroundPoller();
 
@@ -24,8 +21,7 @@ public class MainVerticle extends AbstractVerticle {
     connector = new DBConnector(vertx);
     Router router = Router.router(vertx);
     router.route().handler(BodyHandler.create());
-    services.put("https://www.kry.se", "UNKNOWN");
-    vertx.setPeriodic(1000 * 60, timerId -> poller.pollServices(services));
+    vertx.setPeriodic(1000*60, timerId -> poller.pollServices(connector));
     setRoutes(router);
     vertx
         .createHttpServer()
@@ -43,26 +39,45 @@ public class MainVerticle extends AbstractVerticle {
   private void setRoutes(Router router){
     router.route("/*").handler(StaticHandler.create());
     router.get("/service").handler(req -> {
-      List<JsonObject> jsonServices = services
-          .entrySet()
-          .stream()
-          .map(service ->
-              new JsonObject()
-                  .put("name", service.getKey())
-                  .put("status", service.getValue()))
-          .collect(Collectors.toList());
-      req.response()
-          .putHeader("content-type", "application/json")
-          .end(new JsonArray(jsonServices).encode());
+      Future<ResultSet> queryResult = connector.query("select * from service;");
+      queryResult.setHandler(asyncResult -> {
+        if(asyncResult.succeeded()) {
+          List<JsonObject> jsonServices = asyncResult.result().getRows();
+          req.response()
+                  .putHeader("content-type", "application/json")
+                  .end(new JsonArray(jsonServices).encode());
+        }
+      });
+
     });
     router.post("/service").handler(req -> {
       JsonObject jsonBody = req.getBodyAsJson();
-      services.put(jsonBody.getString("url"), "UNKNOWN");
+      String url = jsonBody.getString("url");
+      if(Util.isValidUrl(url)){
+        String query = Util.getQueryBuilder(url, jsonBody.getString("name"), "Unknown");
+        connector.query(query);
+        req.response()
+                .putHeader("content-type", "text/plain")
+                .end("OK");
+      }else{
+        req.response()
+                .putHeader("content-type", "text/plain")
+                .setStatusCode(400)
+                .end("Url not valid");
+      }
+
+    });
+    router.post("/service/delete").handler(req -> {
+      JsonObject jsonBody = req.getBodyAsJson();
+      String query = Util.deleteQueryBuilder(jsonBody.getString("url"), jsonBody.getString("name"));
+      connector.query(query);
       req.response()
-          .putHeader("content-type", "text/plain")
-          .end("OK");
+              .putHeader("content-type", "text/plain")
+              .end("OK");
     });
   }
+
+
 
 }
 
