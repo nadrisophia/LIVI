@@ -12,7 +12,6 @@ import io.vertx.ext.sql.ResultSet;
 import java.util.List;
 
 public class MainVerticle extends AbstractVerticle {
-
   private DBConnector connector;
   private BackgroundPoller poller = new BackgroundPoller();
 
