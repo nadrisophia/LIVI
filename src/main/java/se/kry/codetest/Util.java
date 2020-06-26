@@ -4,10 +4,10 @@ import org.apache.commons.validator.routines.UrlValidator;
 
 public class Util {
     public static String getQueryBuilder(String url, String name, String status){
-        return "insert into service(url, status, name) values('" + url + "', '" + status+ "', '" + name + "');";
+        return "insert into service(url, status, name) values('" + url + "', '" + status + "', '" + name + "');";
     }
-    public static String deleteQueryBuilder(String url, String name){
-        return "delete from service where url = '" + url + "' and name = '" + name + "';";
+    public static String deleteQueryBuilder(String id){
+        return "delete from service where rowid = '" + id + "';";
     }
 
     public static String updateQueryBuilder(String url, String name, String status){

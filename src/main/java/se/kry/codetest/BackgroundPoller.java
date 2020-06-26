@@ -1,9 +1,8 @@
 package se.kry.codetest;
 
 import io.vertx.core.Future;
-import io.vertx.core.json.JsonObject;
-import io.vertx.ext.sql.ResultSet;
 import org.apache.http.client.fluent.Request;
+import se.kry.codetest.model.Service;
 
 import java.io.IOException;
 
@@ -13,15 +12,16 @@ import java.util.List;
 public class BackgroundPoller {
 
   public Future<List<String>> pollServices(DBConnector connector){
-
-    Future<ResultSet> queryResult = connector.query("select * from service;");
+    // I am not sure aboput using parallel streams here, some requests might be long and blocking resources for all the stuff taht's happening.
+    //i'm not sure how vertx works for these type of situations i need more research
+    // Also i would probable use the poller as a different component (maybe in its own verticle? not sure..
     List<String> l = new ArrayList<>();
-    queryResult.setHandler(asyncResult -> {
+    connector.getAllServices().setHandler(asyncResult -> {
       if(asyncResult.succeeded()) {
-        List<JsonObject> jsonServices = asyncResult.result().getRows();
-        for(JsonObject service : jsonServices){
-          String url = service.getString("url");
-          String name = service.getString("name");
+        List<Service> services = asyncResult.result();
+        for(Service service : services){
+          String url = service.getUrl();
+          String name = service.getName();
           int s = 0;
           try {
             s = Request.Get(url)
@@ -32,8 +32,7 @@ public class BackgroundPoller {
             System.out.println("Poll failed for " + url);
             e.printStackTrace();
           }finally{
-            String query = Util.updateQueryBuilder(url, name, s == 200 ? "OK" : "FAILED" );
-            connector.query(query);
+            connector.updateService(url, name, s == 200 ? "OK" : "FAILED" );
             l.add(s == 200 ? "OK" : "FAILED");
           }
         }

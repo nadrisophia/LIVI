@@ -7,6 +7,11 @@ import io.vertx.core.json.JsonObject;
 import io.vertx.ext.jdbc.JDBCClient;
 import io.vertx.ext.sql.ResultSet;
 import io.vertx.ext.sql.SQLClient;
+import se.kry.codetest.model.Service;
+import se.kry.codetest.model.ServiceStatus;
+
+import java.util.List;
+import java.util.stream.Collectors;
 
 public class DBConnector {
 
@@ -45,6 +50,47 @@ public class DBConnector {
       }
     });
     return queryResultFuture;
+  }
+
+  public Future<List<Service>> getAllServices() {
+    Future<List<Service>> resultFuture = Future.future();
+    query("select ROWID, S.* from service S;").setHandler( resultSet ->
+                    resultFuture.complete(resultSet.result().getRows(true).stream()
+                            .map(row -> {
+                              return new Service(
+                                      row.getInteger("rowid"),
+                                      row.getString("name"),
+                                      row.getString("url"),
+                                      ServiceStatus.valueOf(row.getString("status")),
+                                      row.getInstant("created"));
+                            })
+                            .collect(Collectors.toList()))
+            );
+    return resultFuture;
+  }
+
+  public Future<ResultSet> addService(String url, String name){
+    String query = Util.getQueryBuilder(url, name, "UNKNOWN");
+    Future<ResultSet> resultFuture = Future.future();
+    query(query).setHandler(resultSet -> resultFuture.complete(resultSet.result()));
+    return resultFuture;
+
+  }
+
+  public Future<ResultSet> deleteService(String id){
+    String query = Util.deleteQueryBuilder(id);
+    Future<ResultSet> resultFuture = Future.future();
+    query(query).setHandler(resultSet -> resultFuture.complete(resultSet.result()));
+    return resultFuture;
+
+  }
+
+  public Future<ResultSet> updateService(String url, String name, String status){
+    String query = Util.updateQueryBuilder(url, name, status);
+    Future<ResultSet> resultFuture = Future.future();
+    query(query).setHandler(resultSet -> resultFuture.complete(resultSet.result()));
+    return resultFuture;
+
   }
 
 

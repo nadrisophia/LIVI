@@ -2,16 +2,16 @@ package se.kry.codetest;
 
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.Future;
-import io.vertx.core.json.JsonArray;
+import io.vertx.core.json.Json;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.Router;
+import io.vertx.ext.web.RoutingContext;
 import io.vertx.ext.web.handler.BodyHandler;
 import io.vertx.ext.web.handler.StaticHandler;
-import io.vertx.ext.sql.ResultSet;
 
-import java.util.List;
 
 public class MainVerticle extends AbstractVerticle {
+
   private DBConnector connector;
   private BackgroundPoller poller = new BackgroundPoller();
 
@@ -37,43 +37,67 @@ public class MainVerticle extends AbstractVerticle {
 
   private void setRoutes(Router router){
     router.route("/*").handler(StaticHandler.create());
-    router.get("/service").handler(req -> {
-      Future<ResultSet> queryResult = connector.query("select * from service;");
-      queryResult.setHandler(asyncResult -> {
-        if(asyncResult.succeeded()) {
-          List<JsonObject> jsonServices = asyncResult.result().getRows();
-          req.response()
-                  .putHeader("content-type", "application/json")
-                  .end(new JsonArray(jsonServices).encode());
+    router.get("/service").handler(this::getAll);
+    router.post("/service").handler(this::addOne);
+    router.delete("/service/:id").handler(this::deleteOne);
+  }
+
+  private void getAll(RoutingContext routingContext) {
+    connector.getAllServices().setHandler(asyncResult -> {
+      if(asyncResult.succeeded()) {
+        routingContext.response().setStatusCode(200)
+                .putHeader("content-type", "application/json")
+                .end(Json.encodePrettily(asyncResult.result()));
+      }
+    });
+  }
+
+  private void addOne(RoutingContext routingContext) {
+    JsonObject jsonBody = routingContext.getBodyAsJson();
+    String url = jsonBody.getString("url");
+    String name = jsonBody.getString("name");
+    if(Util.isValidUrl(url)){
+      connector.addService(url, name).setHandler(asyncResult -> {
+        if(asyncResult.succeeded()){
+          routingContext.response()
+                  .setStatusCode(201)
+                  .putHeader("content-type", "text/plain")
+                  .end("OK");
+        }else{
+          routingContext.response()
+                  .putHeader("content-type", "text/plain")
+                  .setStatusCode(500)
+                  .end("Create failed");
         }
       });
-
-    });
-    router.post("/service").handler(req -> {
-      JsonObject jsonBody = req.getBodyAsJson();
-      String url = jsonBody.getString("url");
-      if(Util.isValidUrl(url)){
-        String query = Util.getQueryBuilder(url, jsonBody.getString("name"), "Unknown");
-        connector.query(query);
-        req.response()
-                .putHeader("content-type", "text/plain")
-                .end("OK");
-      }else{
-        req.response()
-                .putHeader("content-type", "text/plain")
-                .setStatusCode(400)
-                .end("Url not valid");
-      }
-
-    });
-    router.post("/service/delete").handler(req -> {
-      JsonObject jsonBody = req.getBodyAsJson();
-      String query = Util.deleteQueryBuilder(jsonBody.getString("url"), jsonBody.getString("name"));
-      connector.query(query);
-      req.response()
+    }else{
+      routingContext.response()
               .putHeader("content-type", "text/plain")
-              .end("OK");
-    });
+              .setStatusCode(400)
+              .end("Invalid URL");
+    }
+  }
+
+  private void deleteOne(RoutingContext routingContext) {
+    String id = routingContext.request().getParam("id");
+    if (id == null) {
+      routingContext.response().setStatusCode(400).end();
+    } else {
+      connector.deleteService(id).setHandler(asyncResult -> {
+        if(asyncResult.succeeded()){
+          routingContext.response()
+                  .setStatusCode(204)
+                  .putHeader("content-type", "text/plain")
+                  .end("OK");
+        }else{
+          routingContext.response()
+                  .putHeader("content-type", "text/plain")
+                  .setStatusCode(500)
+                  .end("Delete failed");
+        }
+      });
+    }
+
   }
 
 
